@@ -30,7 +30,7 @@ fn main() {
                 String::new()
             });
 
-            let mut lexer = Lexer::new(file_contents);
+            let mut lexer = Lexer::new(&file_contents);
             let tokens = lexer.analyze();
 
             for tok in tokens {
@@ -47,7 +47,7 @@ fn main() {
                 String::new()
             });
 
-            let mut lexer = Lexer::new(file_contents);
+            let mut lexer = Lexer::new(&file_contents);
             let tokens = lexer.analyze();
 
             if lexer.encountered_error {
@@ -74,7 +74,7 @@ fn main() {
                 String::new()
             });
 
-            let mut lexer = Lexer::new(file_contents);
+            let mut lexer = Lexer::new(&file_contents);
             let tokens = lexer.analyze();
 
             if lexer.encountered_error {
@@ -103,7 +103,7 @@ fn main() {
                 String::new()
             });
 
-            let mut lexer = Lexer::new(file_contents);
+            let mut lexer = Lexer::new(&file_contents);
             let tokens = lexer.analyze();
 
             if lexer.encountered_error {
@@ -119,13 +119,51 @@ fn main() {
             }
 
             let statements = stmts.unwrap();
-            
+
             let mut resolver = Resolver::new();
             if let Err(err) = resolver.resolve_statements(&statements) {
-                eprintln!("{}", err.message);
+                let relevant_lines: Vec<&str> = file_contents.split('\n').collect();
+                let line_nr_width = ((err.token.span.line_end + 1).ilog10() + 1) as usize;
+                eprintln!("\n");
+                for i in err.token.span.line_start - 2..=err.token.span.line_end + 2 {
+                    if i != err.token.span.line_start {
+                        eprintln!(
+                            "{}{} | {}",
+                            " ".repeat(line_nr_width - (i.ilog10() + 1) as usize),
+                            i,
+                            relevant_lines[(i - 1) as usize]
+                        );
+                    } else {
+                        let start = err.token.span.col_start as usize;
+                        let end = err.token.span.col_end as usize;
+
+                        let line = relevant_lines[(i - 1) as usize];
+
+                        eprintln!(
+                            "{}{} | {}{}{}",
+                            " ".repeat(line_nr_width - (i.ilog10() + 1) as usize),
+                            i,
+                            &line[..start - 1],
+                            "\x1B[1m\x1B[91m".to_string()
+                                + &line[start - 1..end - 1]
+                                + "\x1B[39m\x1B[22m",
+                            &line[end - 1..],
+                        );
+
+                        eprintln!(
+                            "{} |{}",
+                            " ".repeat(line_nr_width),
+                            " ".repeat(start)
+                                + "\x1B[1m\x1B[91m"
+                                + &"^".repeat(end - start)
+                                + "\x1B[39m\x1B[22m",
+                        );
+                    }
+                }
+                eprintln!("\n\x1B[91m{}\x1B[39m", err.message);
                 exit(65);
             }
-            
+
             let mut interpreter = Interpreter::new();
             interpreter.locals = resolver.locals;
             if let Err(e) = interpreter.interpret(&statements) {

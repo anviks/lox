@@ -28,6 +28,7 @@ pub(crate) struct Resolver {
 }
 
 pub(crate) struct ResolveError {
+    pub(crate) token: Token,
     pub(crate) message: String,
 }
 
@@ -54,6 +55,7 @@ impl Resolver {
             && let Some(_) = map.insert(name.clone().lexeme, false)
         {
             return Err(ResolveError {
+                token: name.clone(),
                 message: "Already a variable with this name in this scope.".to_string(),
             });
         }
@@ -146,11 +148,13 @@ impl Resolver {
                 self.resolve_function(func, FunctionType::Function)?;
                 Ok(())
             }
-            Stmt::Return { keyword: _, value } => match self.current_function {
+            Stmt::Return { keyword, value } => match self.current_function {
                 FunctionType::None => Err(ResolveError {
+                    token: keyword.clone(),
                     message: "Can't return from top-level code.".to_string(),
                 }),
                 FunctionType::Initializer if value.is_some() => Err(ResolveError {
+                    token: keyword.clone(),
                     message: "Can't return a value from an initializer.".to_string(),
                 }),
                 _ if let Some(ex) = value => self.resolve_expression(ex),
@@ -172,6 +176,7 @@ impl Resolver {
 
                     if name.lexeme == sup.lexeme {
                         return Err(ResolveError {
+                            token: sup.clone(),
                             message: "A class can't inherit from itself.".to_string(),
                         });
                     }
@@ -223,6 +228,7 @@ impl Resolver {
                     && !*b
                 {
                     Err(ResolveError {
+                        token: token.clone(),
                         message: "Can't read local variable in its own initializer.".to_string(),
                     })
                 } else {
@@ -273,14 +279,17 @@ impl Resolver {
                     Ok(self.resolve_local(expr, &token.lexeme))
                 }
                 ClassType::None => Err(ResolveError {
+                    token: token.clone(),
                     message: "Can't use 'this' outside of a class.".to_string(),
                 }),
             },
             Expr::Super { keyword, method: _ } => match self.current_class {
                 ClassType::None => Err(ResolveError {
+                    token: keyword.clone(),
                     message: "Can't use 'super' outside of a class.".to_string(),
                 }),
                 ClassType::Class => Err(ResolveError {
+                    token: keyword.clone(),
                     message: "Can't use 'super' in a class with no superclass.".to_string(),
                 }),
                 ClassType::Subclass => {
