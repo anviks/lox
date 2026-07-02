@@ -9,7 +9,14 @@ mod resolver;
 mod token;
 mod value;
 
-use std::{env, fs, process::exit};
+use std::{
+    cmp::{max, min},
+    env, fs,
+    io::IsTerminal,
+    process::exit,
+};
+
+use owo_colors::{OwoColorize, Style};
 
 use crate::{interpreter::Interpreter, lexer::Lexer, parser::Parser, resolver::Resolver};
 
@@ -98,6 +105,12 @@ fn main() {
             }
         }
         "run" => {
+            let color = std::io::stderr().is_terminal() && std::env::var_os("NO_COLOR").is_none();
+            let styled = |s: Style| if color { s } else { Style::new() };
+
+            let err_style = styled(Style::new().bright_red());
+            let err_bold_style = styled(Style::new().bright_red().bold());
+
             let file_contents = fs::read_to_string(filename).unwrap_or_else(|_| {
                 eprintln!("Failed to read file {}", filename);
                 String::new()
@@ -122,45 +135,44 @@ fn main() {
 
             let mut resolver = Resolver::new();
             if let Err(err) = resolver.resolve_statements(&statements) {
-                let relevant_lines: Vec<&str> = file_contents.split('\n').collect();
-                let line_nr_width = ((err.token.span.line_end + 1).ilog10() + 1) as usize;
-                eprintln!("\n");
-                for i in err.token.span.line_start - 2..=err.token.span.line_end + 2 {
-                    if i != err.token.span.line_start {
-                        eprintln!(
-                            "{}{} | {}",
-                            " ".repeat(line_nr_width - (i.ilog10() + 1) as usize),
-                            i,
-                            relevant_lines[(i - 1) as usize]
-                        );
-                    } else {
-                        let start = err.token.span.col_start as usize;
-                        let end = err.token.span.col_end as usize;
+                let lines: Vec<&str> = file_contents.split('\n').collect();
+                let span = &err.token.span;
 
-                        let line = relevant_lines[(i - 1) as usize];
+                let digits = |n: u32| n.checked_ilog10().unwrap_or(0) as usize + 1;
+
+                let first = max(span.line_start.saturating_sub(2), 1);
+                let last = min(span.line_end + 2, lines.len() as u32);
+                let width = digits(last);
+
+                eprintln!();
+                for i in first..=last {
+                    let pad = " ".repeat(width.saturating_sub(digits(i)));
+                    let line = lines[(i - 1) as usize];
+
+                    if i != span.line_start {
+                        eprintln!("{}{} | {}", pad, i, line);
+                    } else {
+                        let start = span.col_start as usize;
+                        let end = span.col_end as usize;
 
                         eprintln!(
                             "{}{} | {}{}{}",
-                            " ".repeat(line_nr_width - (i.ilog10() + 1) as usize),
+                            pad,
                             i,
                             &line[..start - 1],
-                            "\x1B[1m\x1B[91m".to_string()
-                                + &line[start - 1..end - 1]
-                                + "\x1B[39m\x1B[22m",
+                            (&line[start - 1..end - 1]).style(err_bold_style),
                             &line[end - 1..],
                         );
 
                         eprintln!(
-                            "{} |{}",
-                            " ".repeat(line_nr_width),
-                            " ".repeat(start)
-                                + "\x1B[1m\x1B[91m"
-                                + &"^".repeat(end - start)
-                                + "\x1B[39m\x1B[22m",
+                            "{} |{}{}",
+                            " ".repeat(width),
+                            " ".repeat(start),
+                            "^".repeat(end - start).style(err_bold_style),
                         );
                     }
                 }
-                eprintln!("\n\x1B[91m{}\x1B[39m", err.message);
+                eprintln!("\n{}", err.message.style(err_style));
                 exit(65);
             }
 

@@ -9,3 +9,4 @@ license = "MIT"
 repository = "https://github.com/anviks/lox"
 
 [dependencies]
+owo-colors = "4.3.0"
