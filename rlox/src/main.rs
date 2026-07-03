@@ -38,7 +38,7 @@ struct Args {
     dump: Option<DumpOption>,
 }
 
-fn display_error(file_contents: &String, span: &Span, message: String) {
+fn display_error(file_contents: &String, span: &Span, message: &String) {
     let color = std::io::stderr().is_terminal() && std::env::var_os("NO_COLOR").is_none();
     let styled = |s: Style| if color { s } else { Style::new() };
 
@@ -96,7 +96,7 @@ fn main() {
     let tokens_result = lexer.analyze();
 
     if let Err(err) = tokens_result {
-        display_error(&file_contents, &err.span, err.message);
+        display_error(&file_contents, &err.span, &err.message);
         exit(65);
     }
 
@@ -120,7 +120,7 @@ fn main() {
     }
 
     if let Err(err) = stmts {
-        eprintln!("{}", err.message);
+        display_error(&file_contents, &err.token.span, &err.message);
         exit(65);
     }
 
@@ -128,7 +128,7 @@ fn main() {
 
     let mut resolver = Resolver::new();
     if let Err(err) = resolver.resolve_statements(&statements) {
-        display_error(&file_contents, &err.token.span, err.message);
+        display_error(&file_contents, &err.token.span, &err.message);
         exit(65);
     }
 

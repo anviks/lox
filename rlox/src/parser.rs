@@ -5,7 +5,7 @@ use crate::{
 
 #[derive(Debug)]
 pub(crate) struct ParseError {
-    token: Token,
+    pub(crate) token: Token,
     pub(crate) message: String,
 }
 
