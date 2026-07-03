@@ -25,6 +25,12 @@ fn get_token_type_for_identifier(identifier: &str) -> TokenType {
     }
 }
 
+#[derive(Debug)]
+pub(crate) struct SyntaxError {
+    pub(crate) span: Span,
+    pub(crate) message: String,
+}
+
 pub struct Lexer {
     pub source: Vec<char>,
     pub current: usize,
@@ -32,7 +38,6 @@ pub struct Lexer {
     pub column: u32,
     tok_start_line: u32,
     tok_start_col: u32,
-    pub encountered_error: bool,
 }
 
 impl Lexer {
@@ -44,7 +49,6 @@ impl Lexer {
             column: 1,
             tok_start_line: 1,
             tok_start_col: 1,
-            encountered_error: false,
         }
     }
 
@@ -75,43 +79,59 @@ impl Lexer {
         c
     }
 
-    fn string(&mut self) -> Option<Token> {
+    fn make_error(&self, message: String) -> SyntaxError {
+        SyntaxError {
+            span: Span {
+                line_start: self.line,
+                col_start: self.column - 1,
+                line_end: self.line,
+                col_end: self.column,
+            },
+            message,
+        }
+    }
+
+    fn string(&mut self) -> Result<Token, SyntaxError> {
+        let line = self.line;
+        let column = self.column;
         let mut s = String::new();
         self.consume();
         while !self.eof() && self.peek() != '"' {
             s.push(self.consume());
         }
         if self.eof() {
-            eprintln!("[line {}] Error: Unterminated string.", self.line);
-            self.encountered_error = true;
-            None
+            Err(SyntaxError {
+                span: Span {
+                    line_start: line,
+                    col_start: column,
+                    line_end: line,
+                    col_end: column + 1,
+                },
+                message: "Unterminated string.".to_string(),
+            })
         } else {
             self.consume();
-            Some(self.make_token_with_literal(TokenType::String, format!("\"{}\"", s), s))
+            Ok(self.make_token_with_literal(TokenType::String, format!("\"{}\"", s), s))
         }
     }
 
-    fn number(&mut self) -> Option<Token> {
+    fn number(&mut self) -> Token {
         let mut num_str = String::new();
-        while !self.eof() && (self.peek().is_ascii_digit() || self.peek() == '.') {
+        while !self.eof() && self.peek().is_ascii_digit() {
             num_str.push(self.consume());
         }
 
-        let parsed_num = num_str.parse::<f64>();
-
-        match parsed_num {
-            Ok(num) => {
-                Some(self.make_token_with_literal(TokenType::Number, num_str, format_float(num)))
-            }
-            Err(_) => {
-                eprintln!(
-                    "[line {}] Error: Invalid number literal: {}",
-                    self.line, num_str
-                );
-                self.encountered_error = true;
-                None
+        if self.peek() == '.' && self.peek_at(1).is_ascii_digit() {
+            num_str.push(self.consume());
+            while !self.eof() && self.peek().is_ascii_digit() {
+                num_str.push(self.consume());
             }
         }
+
+        let num = num_str
+            .parse::<f64>()
+            .expect("number scanner produced a non-numeric lexeme");
+        self.make_token_with_literal(TokenType::Number, num_str, format_float(num))
     }
 
     fn identifier(&mut self) -> Token {
@@ -181,9 +201,7 @@ impl Lexer {
         }
     }
 
-    pub fn analyze(&mut self) -> Vec<Token> {
-        self.encountered_error = false;
-
+    pub fn analyze(&mut self) -> Result<Vec<Token>, SyntaxError> {
         let mut tokens: Vec<Token> = vec![];
 
         while !self.eof() {
@@ -224,8 +242,8 @@ impl Lexer {
                 tokens.push(self.make_token(token_type, lexeme));
             } else {
                 match self.peek() {
-                    '"' => tokens.extend(self.string()),
-                    '0'..='9' => tokens.extend(self.number()),
+                    '"' => tokens.push(self.string()?),
+                    '0'..='9' => tokens.push(self.number()),
                     'a'..='z' | 'A'..='Z' | '_' => tokens.push(self.identifier()),
                     ' ' | '\t' => {
                         self.consume();
@@ -245,8 +263,7 @@ impl Lexer {
                     }
                     _ => {
                         let c = self.consume();
-                        eprintln!("[line {}] Error: Unexpected character: {}", self.line, c);
-                        self.encountered_error = true;
+                        return Err(self.make_error(format!("Unexpected character: {}", c)));
                     }
                 }
             }
@@ -260,6 +277,6 @@ impl Lexer {
         self.line = 1;
         self.column = 1;
 
-        tokens
+        Ok(tokens)
     }
 }

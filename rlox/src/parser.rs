@@ -12,7 +12,6 @@ pub(crate) struct ParseError {
 pub(crate) struct Parser {
     pub(crate) tokens: Vec<Token>,
     pub(crate) current: usize,
-    pub(crate) encountered_error: bool,
 }
 
 impl Parser {
@@ -20,7 +19,6 @@ impl Parser {
         Self {
             tokens,
             current: 0,
-            encountered_error: false,
         }
     }
 
@@ -63,28 +61,6 @@ impl Parser {
             }
         }
         false
-    }
-
-    fn synchronize(&mut self) {
-        self.advance();
-
-        while !self.is_at_end() {
-            if self.previous().token_type == TokenType::Semicolon {
-                return;
-            }
-
-            match self.peek().token_type {
-                TokenType::Class
-                | TokenType::Fun
-                | TokenType::Var
-                | TokenType::For
-                | TokenType::If
-                | TokenType::While
-                | TokenType::Print
-                | TokenType::Return => return,
-                _ => self.advance(),
-            };
-        }
     }
 
     fn primary(&mut self) -> Result<Expr, ParseError> {
@@ -523,21 +499,6 @@ impl Parser {
             self.class_declaration()
         } else {
             self.statement()
-        }
-    }
-
-    pub(crate) fn parse(&mut self) -> Option<Expr> {
-        self.encountered_error = false;
-        match self.expression() {
-            Ok(expr) => Some(expr),
-            Err(e) => {
-                eprintln!(
-                    "[line {}] Error at '{}': Expect expression.",
-                    e.token.span.line_start, e.token.lexeme
-                );
-                self.encountered_error = true;
-                None
-            }
         }
     }
 
