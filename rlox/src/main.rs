@@ -47,9 +47,7 @@ fn main() {
     let tokens = lexer.analyze();
 
     if let Some(DumpOption::Tokens) = args.dump {
-        for token in &tokens {
-            println!("{}", token);
-        }
+        println!("{}", dump_tokens(&tokens));
         return;
     }
 
