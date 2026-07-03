@@ -81,34 +81,21 @@ impl Lexer {
 
     fn make_error(&self, message: String) -> SyntaxError {
         SyntaxError {
-            span: Span {
-                line_start: self.line,
-                col_start: self.column - 1,
-                line_end: self.line,
-                col_end: self.column,
-            },
+            span: self.current_span(),
             message,
         }
     }
 
     fn string(&mut self) -> Result<Token, SyntaxError> {
-        let line = self.line;
-        let column = self.column;
         let mut s = String::new();
         self.consume();
         while !self.eof() && self.peek() != '"' {
             s.push(self.consume());
         }
         if self.eof() {
-            Err(SyntaxError {
-                span: Span {
-                    line_start: line,
-                    col_start: column,
-                    line_end: line,
-                    col_end: column + 1,
-                },
-                message: "Unterminated string.".to_string(),
-            })
+            self.column = self.tok_start_col + 1;
+            self.line = self.tok_start_line;
+            Err(self.make_error("Unterminated string".to_string()))
         } else {
             self.consume();
             Ok(self.make_token_with_literal(TokenType::String, format!("\"{}\"", s), s))
